@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MBTI Zombie Apocalypse: Camp Chaos</title>
+<meta name="description" content="An interactive, offensively stereotypical diorama of how each MBTI type handles the zombie apocalypse.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%9F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+} }
+</script>
+<style>
+  :root {
+    --ink: #14121c; --paper: #fffdf4; --blood: #d6293a; --slime: #9be564; --gold: #ffd23f;
+    --nt: #9a6fd0; --nf: #3fb27f; --sj: #3e97d8; --sp: #e8ac2c;
+    --comic: "Comic Neue", "Comic Sans MS", "Chalkboard SE", sans-serif;
+    --loud: "Bangers", Impact, "Arial Black", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1020; color: var(--paper);
+    font-family: var(--comic); -webkit-user-select: none; user-select: none; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  #stage.hot canvas { cursor: pointer; }
+  #stage.drag canvas { cursor: grabbing; }
+  #vignette { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(5,6,16,.72) 100%); }
+  #flash { position: fixed; inset: 0; pointer-events: none; background: var(--blood); opacity: 0; transition: opacity .5s; }
+  #flash.on { opacity: .28; transition: opacity .05s; }
+
+  /* ---------- speech & thought bubbles ---------- */
+  #bubbles { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .bubble { position: absolute; left: 0; top: 0; max-width: 230px; padding: 8px 13px 9px; text-align: center;
+    background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 18px;
+    font: 700 14px/1.22 var(--comic); box-shadow: 3px 4px 0 rgba(0,0,0,.45); will-change: transform; }
+  .bubble .who { display: block; font: 400 12px/1 var(--loud); letter-spacing: 1.2px; margin-bottom: 4px; opacity: .85; }
+  .bubble .txt { display: block; }
+  .bubble.in .txt { animation: pop .28s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -13px; width: 16px; height: 16px; margin-left: -8px;
+    background: var(--paper); border-right: 3px solid var(--ink); border-bottom: 3px solid var(--ink);
+    transform: rotate(45deg) skew(12deg, 12deg); }
+  .bubble.thought { border-radius: 40px; padding: 10px 18px 11px; border-style: dashed; }
+  .bubble.thought::after { bottom: -16px; width: 11px; height: 11px; margin-left: -4px; border: 3px solid var(--ink);
+    border-radius: 50%; transform: none; }
+  .bubble.thought::before { content: ""; position: absolute; left: 50%; bottom: -27px; width: 6px; height: 6px; margin-left: 5px;
+    background: var(--paper); border: 2px solid var(--ink); border-radius: 50%; }
+  .bubble.zombie { background: #e4f7cf; border-color: #1d3312; color: #142408; }
+  .bubble.zombie::after, .bubble.zombie::before { background: #e4f7cf; border-color: #1d3312; }
+  .bubble.item { background: #fff3c4; }
+  .bubble.item::after, .bubble.item::before { background: #fff3c4; }
+  .bubble.fade { opacity: 0; transition: opacity .35s; }
+
+  /* ---------- HUD ---------- */
+  .hud { position: fixed; z-index: 5; }
+  #title { left: 16px; top: 10px; pointer-events: none; }
+  #title h1 { margin: 0; font: 400 34px/1 var(--loud); letter-spacing: 2px; color: var(--gold);
+    text-shadow: 3px 3px 0 var(--ink), -1px -1px 0 var(--ink), 0 0 18px rgba(214,41,58,.8); }
+  #title h1 b { color: var(--slime); font-weight: 400; }
+  #title p { margin: 3px 0 0 2px; font-size: 13px; color: #cfd3ee; text-shadow: 1px 1px 0 #000; }
+  #bar { right: 12px; top: 12px; display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
+  .btn { font: 400 16px/1 var(--loud); letter-spacing: 1px; color: var(--ink); background: var(--paper);
+    border: 3px solid var(--ink); border-radius: 12px; padding: 8px 11px 7px; cursor: pointer;
+    box-shadow: 2px 3px 0 rgba(0,0,0,.55); transition: transform .08s; white-space: nowrap; }
+  .btn:hover { transform: translateY(-2px) rotate(-1.5deg); background: var(--gold); }
+  .btn:active { transform: translateY(1px); }
+  .btn.off { background: #8f8b9c; color: #2a2733; }
+  .btn.danger { background: var(--blood); color: #fff; }
+  .btn.danger:hover { background: #ff4757; }
+
+  #roster { left: 12px; bottom: 12px; background: rgba(16,15,28,.86); border: 3px solid var(--ink);
+    border-radius: 14px; padding: 9px 10px 10px; box-shadow: 3px 4px 0 rgba(0,0,0,.5); backdrop-filter: blur(4px); }
+  #roster h2 { margin: 0 0 6px; font: 400 17px/1 var(--loud); letter-spacing: 1.2px; color: var(--gold);
+    display: flex; justify-content: space-between; gap: 14px; cursor: pointer; }
+  #roster h2 span { color: var(--slime); }
+  #roster.shut .grid, #roster.shut .cap { display: none; }
+  #roster .cap { font-size: 11px; color: #aab; margin: 6px 0 3px; letter-spacing: .5px; }
+  #roster .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  .cell { font: 400 13px/1 var(--loud); letter-spacing: .8px; text-align: center; padding: 6px 5px 5px; border-radius: 7px;
+    border: 2px solid #3a3850; color: #6d6a86; background: #1c1b2c; cursor: pointer; transition: all .15s; }
+  .cell:hover { border-color: var(--gold); color: #fff; transform: scale(1.1); }
+  .cell.found { color: #fff; border-color: var(--ink); background: var(--c); box-shadow: 0 0 9px var(--c); }
+  .cell.z.found { background: linear-gradient(135deg, var(--c) 45%, #4c7a2c); }
+  .cell.gone { text-decoration: line-through; cursor: help; opacity: .7; }
+
+  #hint { left: 50%; bottom: 12px; transform: translateX(-50%); font-size: 12.5px; color: #d8dbf3; pointer-events: none;
+    background: rgba(16,15,28,.7); padding: 6px 13px; border-radius: 20px; white-space: nowrap; transition: opacity 1s; }
+  #tip { z-index: 6; pointer-events: none; font: 400 14px/1 var(--loud); letter-spacing: 1px; padding: 5px 9px 4px;
+    background: var(--ink); color: var(--gold); border-radius: 7px; border: 2px solid var(--gold); display: none; white-space: nowrap; }
+  #toast { left: 50%; top: 74px; transform: translateX(-50%) rotate(-2deg) scale(0); pointer-events: none;
+    font: 400 30px/1 var(--loud); letter-spacing: 2px; color: #fff; background: var(--blood); padding: 10px 22px 8px;
+    border: 4px solid var(--ink); border-radius: 14px; box-shadow: 4px 5px 0 rgba(0,0,0,.6);
+    transition: transform .25s cubic-bezier(.2,1.6,.4,1); white-space: nowrap; }
+  #toast.on { transform: translateX(-50%) rotate(-2deg) scale(1); }
+
+  /* ---------- intro ---------- */
+  #intro { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; text-align: center; cursor: pointer;
+    background: radial-gradient(ellipse at 50% 40%, rgba(60,14,26,.74), rgba(6,6,14,.94)); transition: opacity .6s; }
+  #intro.bye { opacity: 0; pointer-events: none; }
+  #intro .card { padding: 20px; max-width: 760px; }
+  #intro h1 { margin: 0; font: 400 clamp(46px, 9vw, 104px)/.92 var(--loud); letter-spacing: 4px; color: var(--gold);
+    text-shadow: 5px 5px 0 var(--ink), 0 0 40px rgba(214,41,58,.9); transform: rotate(-2deg); }
+  #intro h1 b { display: block; color: var(--slime); font-weight: 400; }
+  #intro h3 { margin: 18px 0 0; font: 400 clamp(20px, 3vw, 30px)/1 var(--loud); letter-spacing: 3px; color: #fff; }
+  #intro p { color: #c9cce6; font-size: 16px; line-height: 1.5; margin: 16px auto 0; max-width: 520px; }
+  #intro .go { display: inline-block; margin-top: 24px; font: 400 26px/1 var(--loud); letter-spacing: 2px; color: var(--ink);
+    background: var(--slime); border: 4px solid var(--ink); border-radius: 16px; padding: 13px 28px 10px;
+    box-shadow: 4px 5px 0 #000; animation: throb 1.1s ease-in-out infinite; }
+  #intro .go.wait { background: #777; animation: none; }
+  @keyframes throb { 50% { transform: scale(1.07) rotate(1.5deg); } }
+  #intro small { display: block; margin-top: 16px; color: #8a8ca6; font-size: 12px; }
+  #err { position: fixed; inset: auto 0 0 0; z-index: 30; background: #400; color: #fff; font: 12px/1.4 monospace;
+    padding: 8px 12px; display: none; white-space: pre-wrap; }
+
+  @media (max-width: 760px) {
+    #title h1 { font-size: 22px; } #title p, #hint { display: none; }
+    .btn { font-size: 13px; padding: 6px 8px 5px; }
+    #roster .grid { gap: 3px; } .cell { font-size: 10.5px; padding: 5px 2px 4px; }
+    .bubble { font-size: 12px; max-width: 170px; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="vignette"></div>
+<div id="flash"></div>
+<div id="bubbles"></div>
+
+<div id="title" class="hud">
+  <h1>MBTI <b style="display:inline">Zombie</b> Apocalypse</h1>
+  <p>Camp Chaos &mdash; an offensively stereotypical survival diorama</p>
+</div>
+
+<div id="bar" class="hud">
+  <button class="btn danger" id="bBreach" title="Rattle the gate (B)">&#128680; Breach!</button>
+  <button class="btn" id="bTrap" title="INTJ's favourite button (T)">&#128165; Trap</button>
+  <button class="btn" id="bChat" title="Let everyone talk on their own (C)">&#128172; Chatter</button>
+  <button class="btn" id="bTags" title="Name tags (L)">&#127991; Tags</button>
+  <button class="btn" id="bDay" title="Day / night (N)">&#127769; Night</button>
+  <button class="btn" id="bSnd" title="Sound (M)">&#128266; Sound</button>
+</div>
+
+<div id="roster" class="hud">
+  <h2 id="rosterHead"><em style="font-style:normal">Field Guide</em> <span id="count">0 / 31</span></h2>
+  <div class="cap">SURVIVORS</div>
+  <div class="grid" id="gridH"></div>
+  <div class="cap">ZOMBIES</div>
+  <div class="grid" id="gridZ"></div>
+</div>
+
+<div id="hint" class="hud">Click anyone or anything &nbsp;&middot;&nbsp; drag to pan &nbsp;&middot;&nbsp; scroll to zoom &nbsp;&middot;&nbsp; right-drag or Q/E to rotate</div>
+<div id="tip" class="hud"></div>
+<div id="toast" class="hud"></div>
+
+<div id="intro">
+  <div class="card">
+    <h1>MBTI <b>Zombie Apocalypse</b></h1>
+    <h3>CAMP CHAOS</h3>
+    <p>Sixteen personality types. One fence. Zero consensus.<br>
+      Poke the survivors, heckle the horde, and whatever you do,<br>do not knock on the INTJ bunker.</p>
+    <div class="go wait" id="go">Loading the apocalypse&hellip;</div>
+    <small>Any resemblance to your actual personality is entirely the point.</small>
+  </div>
+</div>
+<div id="err"></div>
+
+<script>
+  window.ZL = { tickers: [], entities: [] };
+  window.addEventListener('error', function (e) {
+    var el = document.getElementById('err'); el.style.display = 'block';
+    el.textContent += (e.message || e) + (e.filename ? '  @ ' + e.filename.split('/').pop() + ':' + e.lineno : '') + '\n';
+  });
+</script>
+<script src="js/kit.js"></script>
+<script src="js/cast.js"></script>
+<script src="js/people.js"></script>
+<script src="js/anim.js"></script>
+<script src="js/camp.js"></script>
+<script src="js/outside.js"></script>
+<script src="js/scenery.js"></script>
+<script src="js/sfx.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/events.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
