@@ -87,7 +87,7 @@
     if (s.type) { e.tag = ZL.tag(s.type, s.zombie); e.tagBase = hit.y + hit.h / 2; obj.add(e.tag); }
     obj.traverse((o) => {
       const p = PETS[o.userData.pet];
-      if (p) ZL.addItem({ id: o.userData.pet, title: p.title, obj: o, hit: { w: 0.55, h: 0.55, d: 0.75, y: 0.12, z: 0.1 }, lines: p.lines, onClick: () => ZL.sfx[p.sfx]() });
+      if (p) ZL.addItem({ id: o.userData.pet, title: p.title, obj: o, hit: { w: 0.55, h: 0.55, d: 0.75, y: 0.12, z: 0.1 }, lines: p.lines, onClick: () => ZL.sfx[p.sfx]() }).pet = true;
     });
     return e;
   }
@@ -140,8 +140,11 @@
     const r = canvas.getBoundingClientRect();
     ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObjects(pickables, false).find((h) => !h.object.userData.e.off && !h.object.userData.e.hidden);
-    return hit ? hit.object.userData.e : null;
+    const hits = ray.intersectObjects(pickables, false).filter((h) => !h.object.userData.e.off && !h.object.userData.e.hidden);
+    if (!hits.length) return null;
+    // a pet sits inside its owner's hit box, so let it win when the ray passes through both
+    const pet = hits.find((h) => h.object.userData.e.pet && h.distance - hits[0].distance < 1.5);
+    return (pet || hits[0]).object.userData.e;
   }
   ZL.speak = function (e, idx) {
     if (!e) return;
